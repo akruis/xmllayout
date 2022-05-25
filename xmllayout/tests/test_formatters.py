@@ -1,7 +1,6 @@
 #
 # -*- coding: utf-8 -*-
 
-import cgi
 import logging
 import sys
 from six import StringIO
@@ -10,8 +9,7 @@ try:
 except ImportError:
     import elementtree.ElementTree as ET
 
-from xmllayout import XMLLayout
-from xmllayout.formatters import escape_cdata
+from xmllayout import XMLLayout, DEFAULT_MDC_RE
 
 PY3 = sys.version_info >= (3,)
 
@@ -20,7 +18,7 @@ LOG4J_NS = 'http://jakarta.apache.org/log4j/'
 log = logging.getLogger(__name__)
 stream = StringIO()
 handler = logging.StreamHandler(stream)
-xmllayout = XMLLayout()
+xmllayout = XMLLayout(mdcre=DEFAULT_MDC_RE)
 handler.setFormatter(xmllayout)
 log.addHandler(handler)
 log.setLevel(logging.DEBUG)
