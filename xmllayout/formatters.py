@@ -123,13 +123,34 @@ class XMLLayout(logging.Formatter):
     _illegal_xml_char_RE = u'[\x00-\x08\x0b\x0c\x0e-\x1f' + chr(0xd800) + u'-' + chr(0xdfff) + u'\ufffe\uffff]'
     _illegal_xml_char_RE = re.compile(_illegal_xml_char_RE)
 
-    def handle_non_characters(self, any_unicode):
-        """convert the string any_unicode to a string containing
+    def handle_non_characters(self, string):
+        """convert 'string' to a unicode string containing
         only valid xml characters.
         """
+        if not isinstance(string, str):
+            try:
+                string = str(string)
+            except UnicodeDecodeError:
+                # the default encoding can't handle this string
+                # We must use a different one.
+                # Most probably the string is either encoded in UTF-8 or in an
+                # single-byte-encoding like ISO-8859-x or CP1252 or the string
+                # does not contain text, but data octets.
+                # We can try UTF-8 and if that fails, we know that the string is
+                # not using UTF-8. But there is no easy way to detect the right encoding.
+                # If we assume, that string does not contain text but binary data,
+                # the iso-8859-1 encoding is correct, because this encoding maps
+                # the data-bytes the unicode codepoints with the same numerical
+                # value and can decode every octet sequence.
+                # If the string is long enough, we could use the chardet module,
+                # but most times the string will be short.
+                try:
+                    string = str(string, "UTF-8")
+                except UnicodeDecodeError:
+                    string = str(string, "ISO-8859-1")
         if self.non_xml_char_repl is None:
-            return any_unicode
-        return self._illegal_xml_char_RE.sub(self.non_xml_char_repl, any_unicode)
+            return string
+        return self._illegal_xml_char_RE.sub(self.non_xml_char_repl, string)
 
     _whitespace_RE = re.compile(u'[\x00-\x1f]')
 
