@@ -12,6 +12,7 @@ build/
 develop-eggs/
 dist/
 eggs/
+.eggs/
 lib/
 lib64/
 parts/
@@ -98,3 +99,8 @@ $RECYCLE.BIN/
 *.msi
 *.msm
 *.msp
+
+# Eclipse
+.project
+.pydevproject
+.settings/

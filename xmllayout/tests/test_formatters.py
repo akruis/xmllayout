@@ -3,6 +3,7 @@
 
 import logging
 import sys
+import unittest
 from six import StringIO
 try:
     import xml.etree.ElementTree as ET
@@ -23,6 +24,7 @@ handler.setFormatter(xmllayout)
 log.addHandler(handler)
 log.setLevel(logging.DEBUG)
 
+
 class ElvisException(Exception):
     def __init__(self, info):
         self.info = info
@@ -30,6 +32,7 @@ class ElvisException(Exception):
     def __str__(self):
         return "<ElvisException: %s (TCB because he's the king baby)>" % \
             self.info
+
 
 def test_xmllayout():
     _test_output('')
@@ -67,6 +70,7 @@ def test_xmllayout():
  'wsgi.version': (1, 0),}
 """)
 
+
 def test_exceptions():
     try:
         raise ElvisException('dog')
@@ -80,6 +84,7 @@ def test_exceptions():
         _test_output('Elvis has left the building', exc_info=True,
                      exc_msg=exc_msg)
 
+
 def test_exceptions_cdata():
     exc_msg = 'Hello ]]> World!'
     try:
@@ -88,15 +93,18 @@ def test_exceptions_cdata():
         _test_output('Elvis has left the building', exc_info=True,
                      exc_msg=exc_msg)
 
+
 def test_mdc():
     mdc = {"mdc:a_mdc_key": r"""A Value with "' and german umlaut ÄÖÜäöüß§ &"""}
     _test_output("message", extra=mdc)
+
 
 def get_output():
     output = stream.getvalue().rstrip()
     stream.seek(0)
     stream.truncate(0)
     return '<test xmlns:log4j="%s">%s</test>' % (LOG4J_NS, output)
+
 
 def _test_output(message, level=logging.INFO, log4jlevel=None, exc_info=None,
                  exc_msg=None, extra={}):
@@ -122,3 +130,17 @@ def _test_output(message, level=logging.INFO, log4jlevel=None, exc_info=None,
                                                                     LOG4J_NS))
         assert 'mdc:' + xml_data.get('name') == list(extra.keys())[0]
         assert xml_data.get('value') == list(extra.values())[0]
+
+
+class Test(unittest.TestCase):
+    def test_xmllayout(self):
+        test_xmllayout()
+
+    def test_exceptions(self):
+        test_exceptions()
+
+    def test_exceptions_cdata(self):
+        test_exceptions_cdata()
+
+    def test_mdc(self):
+        test_mdc()
