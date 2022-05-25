@@ -2,11 +2,11 @@ import sys
 
 from setuptools import setup, find_packages
 
-version = '1.1'
+version = '1.1.1'
 
 extra = {}
-if sys.version_info >= (3,):
-    extra['use_2to3'] = True
+#if sys.version_info >= (3,):
+#    extra['use_2to3'] = True  # no longer supported by setuptools >= v58.0.0
 
 setup(name='XMLLayout',
       version=version,
@@ -55,6 +55,6 @@ localhost port 4448::
       include_package_data=True,
       zip_safe=False,
       test_suite='nose.collector',
-      tests_require=['nose'],
+      tests_require=['nose', 'six'],
       **extra
       )

@@ -89,6 +89,7 @@ def test_exceptions_cdata():
 
 def get_output():
     output = stream.getvalue().rstrip()
+    stream.seek(0)
     stream.truncate(0)
     return '<test xmlns:log4j="%s">%s</test>' % (LOG4J_NS, output)
 
