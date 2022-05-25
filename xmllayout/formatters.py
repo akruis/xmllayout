@@ -4,6 +4,7 @@ try:
 except ImportError:
     from html import escape
 import logging
+import re
 
 __all__ = ['XMLLayout']
 
@@ -19,6 +20,9 @@ class XMLLayout(logging.Formatter):
     XMLLayout.html>_`
     """
 
+    NDC_ATTRIBUTE = 'ndc'
+    MDC_RE = re.compile('mdc:(?P<name>.*)')
+
     def format(self, record):
         """Format the log record as XMLLayout XML"""
         levelname = LOG4J_LEVELS.get(record.levelname, record.levelname)
@@ -29,11 +33,19 @@ class XMLLayout(logging.Formatter):
 
         event['message'] = LOG4J_MESSAGE % escape_cdata(record.getMessage())
 
-        # FIXME: Support an NDC somehow
         event['ndc'] = ''
-        #ndc = self.get_ndc(record)
-        #if ndc:
-        #    event['ndc'] = LOG4J_NDC % escape_cdata(ndc)
+        ndc = self.get_ndc(record)
+        if ndc:
+            event['ndc'] = LOG4J_NDC % escape_cdata(ndc)
+
+        # MDC data is stored within a <log4j:properties> element
+        event['properties'] = ''
+        mdc = self.get_mdc(record)
+        if mdc:
+            keys = list(mdc.keys())
+            keys.sort()
+            data = "".join(LOG4J_DATA % (escape(k), escape(mdc[k])) for k in keys)
+            event['properties'] = LOG4J_PROPERTIES % data
 
         event['throwable'] = ''
         if record.exc_info:
@@ -53,6 +65,25 @@ class XMLLayout(logging.Formatter):
         return LOG4J_EVENT % event
 
 
+    def get_ndc(self, record):
+        try:
+            if self.NDC_ATTRIBUTE:
+                return getattr(record, self.NDC_ATTRIBUTE)
+        except Exception:
+            pass
+        return ''
+
+    def get_mdc(self, record):
+        mdc = {}
+        for k in dir(record):
+            match = self.MDC_RE.match(k)
+            if match is not None:
+                try:
+                    mdc[match.group('name')] = getattr(record, k)
+                except Exception:
+                    pass
+        return mdc
+
 def escape_cdata(cdata):
     """Escape XML CDATA content"""
     return cdata.replace(']]>', ']]]]><![CDATA[>')
@@ -63,7 +94,7 @@ LOG4J_EVENT = """\
     timestamp="%(created)i"
     level="%(levelname)s"
     thread="%(threadName)s">
-%(message)s%(ndc)s%(throwable)s%(locationInfo)s</log4j:event>
+%(message)s%(ndc)s%(throwable)s%(locationInfo)s%(properties)s</log4j:event>
 """
 
 # The actual log message
@@ -75,6 +106,17 @@ LOG4J_MESSAGE = """\
 # included with the log record
 LOG4J_NDC = """\
     <log4j:ndc><![CDATA[%s]]></log4j:ndc>
+"""
+
+# log4j's 'Mapped Diagnostic Context': additional, customizable information
+# included with the log record
+LOG4J_PROPERTIES = """\
+    <log4j:properties>
+%s    </log4j:properties>
+"""
+
+LOG4J_DATA = """\
+      <log4j:data name="%s" value="%s"/>
 """
 
 # Exception information, if exc_info was included with the record

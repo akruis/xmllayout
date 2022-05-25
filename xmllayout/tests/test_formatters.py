@@ -1,3 +1,6 @@
+#
+# -*- coding: utf-8 -*-
+
 import cgi
 import logging
 import sys
@@ -87,6 +90,10 @@ def test_exceptions_cdata():
         _test_output('Elvis has left the building', exc_info=True,
                      exc_msg=exc_msg)
 
+def test_mdc():
+    mdc = {"mdc:a_mdc_key": r"""A Value with "' and german umlaut ÄÖÜäöüß§ &"""}
+    _test_output("message", extra=mdc)
+
 def get_output():
     output = stream.getvalue().rstrip()
     stream.seek(0)
@@ -94,10 +101,10 @@ def get_output():
     return '<test xmlns:log4j="%s">%s</test>' % (LOG4J_NS, output)
 
 def _test_output(message, level=logging.INFO, log4jlevel=None, exc_info=None,
-                 exc_msg=None):
+                 exc_msg=None, extra={}):
     if log4jlevel is None:
         log4jlevel = logging.getLevelName(level)
-    log.log(level, message, **dict(exc_info=exc_info))
+    log.log(level, message, **dict(exc_info=exc_info, extra=extra))
     output = get_output()
     tree = ET.XML(output)
 
@@ -111,3 +118,9 @@ def _test_output(message, level=logging.INFO, log4jlevel=None, exc_info=None,
         xml_exc = tree.findtext("{%s}event/{%s}throwable" % (LOG4J_NS,
                                                              LOG4J_NS))
         assert exc_msg in xml_exc, message
+    if extra:
+        xml_data = tree.find("{%s}event/{%s}properties/{%s}data" % (LOG4J_NS,
+                                                                    LOG4J_NS,
+                                                                    LOG4J_NS))
+        assert 'mdc:' + xml_data.get('name') == list(extra.keys())[0]
+        assert xml_data.get('value') == list(extra.values())[0]
