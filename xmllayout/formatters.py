@@ -19,7 +19,7 @@ class XMLLayout(logging.Formatter):
     <http://logging.apache.org/log4j/docs/api/org/apache/log4j/xml/
     XMLLayout.html>_`
     """
-    def __init__(self, fmt=None, datefmt=None, mdcre=None, ndc=None, xmlencoding=None, non_xml_char_repl=None):
+    def __init__(self, fmt=None, datefmt=None, mdcre=None, ndc=None, xmlencoding=None, non_xml_char_repl=None, withoutLocationInfo=None, layout=None):
         """Arguments: `fmt` and `datefmt` are passed to the `__init__` method of the base
         class. The argument `mdcre` is used to compute the
         log4j Mapped Diagnostic Context (MDC). `mdcre` must be a regular expression string
@@ -33,6 +33,11 @@ class XMLLayout(logging.Formatter):
         is substituted for each illegal character. Otherwise it must be a callable object,
         that takes a regular expression match object as its sole argument and returns the
         replacement for the matched regular expression.
+        If the argument 'withoutLocationInfo' is true, omit the location info.
+        The layout argument must be a dictionary with format strings. The keys are 'EVENT',
+        'MESSAGE', 'NDC', 'PROPERTIES', 'DATA', 'THROWABLE' and 'LOCATIONINFO'. Additionally
+        the value of layout can be the name of a predefined layout either 'LAYOUT_FULL',
+        'LAYOUT_COMPACT' or 'LAYOUT_DEFAULT'.
         """
         super(XMLLayout, self).__init__(fmt, datefmt)
 
@@ -52,6 +57,14 @@ class XMLLayout(logging.Formatter):
         non_xml_char_repl = options.get(non_xml_char_repl, non_xml_char_repl)
         self.non_xml_char_repl = non_xml_char_repl
 
+        self.withLocationInfo = not bool(withoutLocationInfo)
+
+        if layout is None:
+            layout = LAYOUT_DEFAULT
+        if isinstance(layout, str):
+            layout = globals()[layout]
+        self.layout = layout
+
     def format(self, record):
         """Format the log record as XMLLayout XML"""
         levelname = LOG4J_LEVELS.get(record.levelname, record.levelname)
@@ -60,12 +73,12 @@ class XMLLayout(logging.Formatter):
                      levelname=self.escape_AttValue(levelname),
                      created=int(record.created * 1000))
 
-        event['message'] = LOG4J_MESSAGE % self.escape_CharData(record.getMessage())
+        event['message'] = self.layout['MESSAGE'] % self.escape_CharData(record.getMessage())
 
         event['ndc'] = ''
         ndc = self.get_ndc(record)
         if ndc:
-            event['ndc'] = LOG4J_NDC % self.escape_CharData(ndc)
+            event['ndc'] = self.layout['NDC'] % self.escape_CharData(ndc)
 
         # MDC data is stored within a <log4j:properties> element
         event['properties'] = ''
@@ -73,25 +86,28 @@ class XMLLayout(logging.Formatter):
         if mdc:
             keys = list(mdc.keys())
             keys.sort()
-            data = "".join(LOG4J_DATA % (self.escape_AttValue(k), self.escape_AttValue(mdc[k])) for k in keys)
-            event['properties'] = LOG4J_PROPERTIES % data
+            data = "".join(self.layout['DATA'] % (self.escape_AttValue(k), self.escape_AttValue(mdc[k])) for k in keys)
+            event['properties'] = self.layout['PROPERTIES'] % data
 
         event['throwable'] = ''
         if record.exc_info:
             if not record.exc_text:
                 record.exc_text = self.formatException(record.exc_info)
-            event['throwable'] = (LOG4J_THROWABLE %
+            event['throwable'] = (self.layout['THROWABLE'] %
                                   self.escape_CharData(record.exc_text))
 
-        location_info = dict(pathname=self.escape_AttValue(record.pathname),
-                             lineno=record.lineno,
-                             module=self.escape_AttValue(record.module), funcName='')
-        if hasattr(record, 'funcName'):
-            # >= Python 2.5
-            location_info['funcName'] = self.escape_AttValue(record.funcName)
-        event['locationInfo'] = LOG4J_LOCATIONINFO % location_info
+        if self.withLocationInfo:
+            location_info = dict(pathname=self.escape_AttValue(record.pathname),
+                                 lineno=record.lineno,
+                                 module=self.escape_AttValue(record.module), funcName='')
+            if hasattr(record, 'funcName'):
+                # >= Python 2.5
+                location_info['funcName'] = self.escape_AttValue(record.funcName)
+            event['locationInfo'] = self.layout['LOCATIONINFO'] % location_info
+        else:
+            event['locationInfo'] = ''
 
-        unicode_msg = LOG4J_EVENT % event
+        unicode_msg = self.layout['EVENT'] % event
 
         if self.encoder is None:
             return unicode_msg
@@ -182,46 +198,82 @@ class XMLLayout(logging.Formatter):
         return self.handle_whitespace(attvalue)
 
 
-# General logging information
-LOG4J_EVENT = """\
-<log4j:event logger="%(name)s"
-    timestamp="%(created)i"
-    level="%(levelname)s"
-    thread="%(threadName)s">
-%(message)s%(ndc)s%(throwable)s%(locationInfo)s%(properties)s</log4j:event>
-"""
+LAYOUT_FULL = dict(
 
-# The actual log message
-LOG4J_MESSAGE = """\
-    <log4j:message>%s</log4j:message>
-"""
+    # General logging information
+    EVENT="""\
+    <log4j:event logger="%(name)s"
+        timestamp="%(created)i"
+        level="%(levelname)s"
+        thread="%(threadName)s">
+    %(message)s%(ndc)s%(throwable)s%(locationInfo)s%(properties)s</log4j:event>
+    """,
 
-# log4j's 'Nested Diagnostic Context': additional, customizable information
-# included with the log record
-LOG4J_NDC = """\
-    <log4j:ndc>%s</log4j:ndc>
-"""
+    # The actual log message
+    MESSAGE="""\
+        <log4j:message>%s</log4j:message>
+    """,
 
-# log4j's 'Mapped Diagnostic Context': additional, customizable information
-# included with the log record
-LOG4J_PROPERTIES = """\
-    <log4j:properties>
-%s    </log4j:properties>
-"""
+    # log4j's 'Nested Diagnostic Context': additional, customisable information
+    # included with the log record
+    NDC="""\
+        <log4j:ndc>%s</log4j:ndc>
+    """,
 
-LOG4J_DATA = """\
-      <log4j:data name="%s" value="%s"/>
-"""
+    # log4j's 'Mapped Diagnostic Context': additional, customisable information
+    # included with the log record
+    PROPERTIES="""\
+        <log4j:properties>
+    %s    </log4j:properties>
+    """,
 
-# Exception information, if exc_info was included with the record
-LOG4J_THROWABLE = """\
-    <log4j:throwable>%s</log4j:throwable>
-"""
+    DATA="""\
+          <log4j:data name="%s" value="%s"/>
+    """,
 
-# Traceback information
-LOG4J_LOCATIONINFO = """\
-    <log4j:locationInfo class="%(module)s"
-        method="%(funcName)s"
-        file="%(pathname)s"
-        line="%(lineno)d"/>
-"""
+    # Exception information, if exc_info was included with the record
+    THROWABLE="""\
+        <log4j:throwable>%s</log4j:throwable>
+    """,
+
+    # Traceback information
+    LOCATIONINFO="""\
+        <log4j:locationInfo class="%(module)s"
+            method="%(funcName)s"
+            file="%(pathname)s"
+            line="%(lineno)d"/>
+    """
+)
+
+LAYOUT_COMPACT = dict(
+
+    # General logging information
+    EVENT="""<event logger="%(name)s" timestamp="%(created)i" level="%(levelname)s" thread="%(threadName)s">%(message)s%(ndc)s%(throwable)s%(locationInfo)s%(properties)s</event>
+""",
+
+    # The actual log message
+    MESSAGE="""
+<message>%s</message>""",
+
+    # log4j's 'Nested Diagnostic Context': additional, customisable information
+    # included with the log record
+    NDC="""
+<ndc>%s</ndc>""",
+
+    # log4j's 'Mapped Diagnostic Context': additional, customisable information
+    # included with the log record
+    PROPERTIES="""<properties>%s</properties>""",
+
+    DATA="""
+<data name="%s" value="%s"/>""",
+
+    # Exception information, if exc_info was included with the record
+    THROWABLE="""
+<throwable>%s</throwable>""",
+
+    # Traceback information
+    LOCATIONINFO="""
+<locationInfo class="%(module)s" method="%(funcName)s" file="%(pathname)s" line="%(lineno)d"/>"""
+)
+
+LAYOUT_DEFAULT = LAYOUT_FULL
